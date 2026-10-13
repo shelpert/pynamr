@@ -1,11 +1,10 @@
 from __future__ import annotations
 import dataclasses
-from typing import List
-
+ 
 import json
 import SimpleITK as sitk
 import numpy as np
-
+ 
 @dataclasses.dataclass
 class AGRReconParameter:
     """num inner iterations"""
@@ -26,7 +25,14 @@ class AGRReconParameter:
     mr_name: str = 'T1_N4_corrected_aligned.npy'
     """prior method"""
     method: int = 0
-
+    """sigma (voxels) of the Gaussian filter applied to the initial
+    (inverse FFT) images used to initialize recon and gamma.
+    0 = no filtering (behavior of the old sodium_bowsher_agr-ge1.py)"""
+    init_filter_sigma: float = 1.4
+    """voxels where the initial echo-1 image is below this fraction of its
+    maximum are treated as background: gamma is fixed to 1 there"""
+    low_signal_threshold: float = 0.05
+ 
 @dataclasses.dataclass
 class BirdCageBowsherParameter:
     """TE05 c0 sodium data file"""
@@ -55,87 +61,71 @@ class BirdCageBowsherParameter:
     tz: float = 0.
     """alignment filter sigma"""
     alignment_filter_sigma: float = 1.3
-
-@dataclasses.dataclass
-class RegistrationParameter:
-    """Fixed Image Filename (the file to register to)"""
-    fixed_filename: str
-    """Scratch Moving Image Filename (the file to register from scratch)"""
-    moving_filename_scratch: str=""
-    """Scratch Aligned Image Filename (the file to save the aligned image (from scratch) to)"""
-    aligned_filename_scratch: str=""
-    """Param Moving Image Filenames (the file(s) to register using the final registration parameters)"""
-    moving_filenames_param: List[str]=dataclasses.field(default_factory=list)
-    """Param Aligned Image Filenames (the file(s) to save the aligned image (from params) to. Must be same size and in the same order as moving_filenames_param)"""
-    aligned_filenames_param: List[str]=dataclasses.field(default_factory=list)
-    """Final Metric Value"""
-    final_metric_value: float = 0.
-    """Final Registration Parameters"""
-    final_parameters: tuple[float, float, float, float, float, float] = (0, 0, 0, 0, 0, 0)
-    """Optimizer Stop Condition"""
-    stop_condition: str=""
-    """Transform File Path"""
-    transform_file: str=""
-   
+    """echo spacing TE2 - TE1 in ms (time between the starts of the two readouts)"""
+    delta_t: float = 5.
+    """k-space readout time lookup file (column 0: time in ms, column 1: k).
+    None = built-in analytic TPI model (matches the g16 trajectory).
+    The same trajectory is assumed for both echoes."""
+    ksp_file: str | None = None
+    """k value at the edge of the acquired k-space.
+    None = max k of ksp_file if given, else 1.5"""
+    k_edge: float | None = None
+    """number of k-space shells / readout time bins"""
+    n_readout_bins: int = 32
+    """total readout duration in ms (time at k_edge). If given, the readout
+    times of the model (analytic or ksp_file) are scaled by a common factor to
+    match it - valid when only the gradient strength differs.
+    None = use the model times unchanged"""
+    readout_duration_ms: float | None = None
+ 
+ 
 def load_config(config_fname: str) -> BirdCageBowsherParameter:
     """Load configuration from a json file
-
+ 
     Parameters
     ----------
     config_fname : str
         abs path to the json config file
-
+ 
     Returns
     -------
     BirdCageBowsherParameter
     """
     return BirdCageBowsherParameter(**json.load(open(config_fname, 'r')))
-
+ 
 def load_recon_config(config_fname: str) -> AGRReconParameter:
     """Load configuration from a json file
-
+ 
     Parameters
     ----------
     config_fname : str
         abs path to the json config file
-
+ 
     Returns
     -------
     AGRReconParameter
     """
     return AGRReconParameter(**json.load(open(config_fname, 'r')))
-
-def load_registration_config(config_fname: str) -> RegistrationParameter:
-    """Load configuration from a json file
-
-    Parameters
-    ----------
-    config_fname : str
-        abs path to the json config file
-
-    Returns
-    -------
-    RegistrationParameter
-    """
-    return RegistrationParameter(**json.load(open(config_fname, 'r')))
-
+ 
+ 
+ 
 def numpy_volume_to_sitk_image(vol: np.ndarray, voxel_size: np.ndarray,
                                origin: np.ndarray) -> sitk.Image:
     """convert a numpy array to a sitk image"""
     image = sitk.GetImageFromArray(np.swapaxes(vol, 0, 2))
     image.SetSpacing(voxel_size.astype(np.float64))
     image.SetOrigin(origin.astype(np.float64))
-
+ 
     return image
-
-
+ 
+ 
 def sitk_image_to_numpy_volume(image: sitk.Image) -> np.ndarray:
     """convert a sitk image to a numpy array"""
     vol = np.swapaxes(sitk.GetArrayFromImage(image), 0, 2)
-
+ 
     return vol
-
-
+ 
+ 
 if __name__ == '__main__':
     params = BirdCageBowsherParameter(
         TE05c0_filename='/abs_path/to/TE05_kw0.co',
@@ -144,12 +134,11 @@ if __name__ == '__main__':
         TE05soskw1_filename='/abs_path/to/TE05_kw1.sos',
         MPRAGE_filename='/abs_path/to/mprage.nii',
         recon_dir='/abs_path/to/recon_dir')
-
+ 
     with open('demo_config.json', 'w') as f:
         json.dump(dataclasses.asdict(params), f, indent=2)
-
+ 
     recon_params = AGRReconParameter()
-
+ 
     with open('recon_params.json', 'w') as f:
         json.dump(dataclasses.asdict(recon_params), f, indent=2)
-   
