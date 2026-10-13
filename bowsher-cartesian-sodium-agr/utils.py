@@ -1,5 +1,6 @@
 from __future__ import annotations
 import dataclasses
+from typing import List
 
 import json
 import SimpleITK as sitk
@@ -46,10 +47,36 @@ class BirdCageBowsherParameter:
     recon_shape: tuple[int, int, int] = (128, 128, 128)
     """sodium FOV in mm"""
     sodium_fov_mm: float = 220.
+    """Shift in x-axis"""
+    tx: float = 0.
+    """Shift in y-axis"""
+    ty: float = 0.
+    """Shift in z-axis"""
+    tz: float = 0.
     """alignment filter sigma"""
     alignment_filter_sigma: float = 1.3
 
-
+@dataclasses.dataclass
+class RegistrationParameter:
+    """Fixed Image Filename (the file to register to)"""
+    fixed_filename: str
+    """Scratch Moving Image Filename (the file to register from scratch)"""
+    moving_filename_scratch: str=""
+    """Scratch Aligned Image Filename (the file to save the aligned image (from scratch) to)"""
+    aligned_filename_scratch: str=""
+    """Param Moving Image Filenames (the file(s) to register using the final registration parameters)"""
+    moving_filenames_param: List[str]=dataclasses.field(default_factory=list)
+    """Param Aligned Image Filenames (the file(s) to save the aligned image (from params) to. Must be same size and in the same order as moving_filenames_param)"""
+    aligned_filenames_param: List[str]=dataclasses.field(default_factory=list)
+    """Final Metric Value"""
+    final_metric_value: float = 0.
+    """Final Registration Parameters"""
+    final_parameters: tuple[float, float, float, float, float, float] = (0, 0, 0, 0, 0, 0)
+    """Optimizer Stop Condition"""
+    stop_condition: str=""
+    """Transform File Path"""
+    transform_file: str=""
+   
 def load_config(config_fname: str) -> BirdCageBowsherParameter:
     """Load configuration from a json file
 
@@ -78,7 +105,19 @@ def load_recon_config(config_fname: str) -> AGRReconParameter:
     """
     return AGRReconParameter(**json.load(open(config_fname, 'r')))
 
+def load_registration_config(config_fname: str) -> RegistrationParameter:
+    """Load configuration from a json file
 
+    Parameters
+    ----------
+    config_fname : str
+        abs path to the json config file
+
+    Returns
+    -------
+    RegistrationParameter
+    """
+    return RegistrationParameter(**json.load(open(config_fname, 'r')))
 
 def numpy_volume_to_sitk_image(vol: np.ndarray, voxel_size: np.ndarray,
                                origin: np.ndarray) -> sitk.Image:
